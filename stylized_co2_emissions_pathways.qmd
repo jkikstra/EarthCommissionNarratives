@@ -28,6 +28,7 @@ source(here("utils.R"))
 # Making Emissions Pathways
 
 ### Define emissions points
+
 ```{r}
 
 
@@ -70,6 +71,7 @@ emissions.definitions <- tibble(
 ```
 
 ### Quick visual
+
 ```{r}
 
 # quick visual
@@ -104,7 +106,9 @@ save_ggplot(f = here("figures", "co2_sketch"),
        w = 125)
 
 ```
+
 ### To IAMC format
+
 ```{r}
 # library for interpolation
 library(zoo)
@@ -156,8 +160,7 @@ write_delim(x = interpolated.data.wide,
 
 # Infilling & Climate run
 
-Note: this happens right now using the AR6 infilling pipeline.
-In the future we can do this more explicitly if we want to.
+Note: this happens right now using the AR6 infilling pipeline. In the future we can do this more explicitly if we want to.
 
 ```{r}
 
@@ -168,7 +171,6 @@ climate_extended <- load_excel_iamc(file_path = here("data", "climate", "emissio
   iamc_wide_to_long(upper.to.lower = T)
 
 ```
-
 
 # Tipping risk functions
 
@@ -275,10 +277,10 @@ GMT_to_TR <- Vectorize(GMT_to_TR)
 
 ```
 
+# Visualise
 
-# Visualise 
+### Emissions (CO2)
 
-### Emissions (CO2) 
 ```{r}
 
 # ...
@@ -286,6 +288,7 @@ GMT_to_TR <- Vectorize(GMT_to_TR)
 ```
 
 ### Temperature
+
 ```{r}
 
 # real data
@@ -339,13 +342,14 @@ save_ggplot(f = here("figures", "temp_magicc"),
 ```
 
 ### Tipping risk: Data
+
 ```{r}
 # until 2150
 tr <- climate_extended %>% 
   mutate(
     AMOC = GMT_to_TR(temp = value, tipping_element = "AMOC"),
     Greenland = GMT_to_TR(temp = value, tipping_element = "GrIS"),
-    `West Antarctica` = GMT_to_TR(temp = value, tipping_element = "GrIS"),
+    `West Antarctica` = GMT_to_TR(temp = value, tipping_element = "WAIS"),
     `Coral Reefs` = GMT_to_TR(temp = value, tipping_element = "REEF"),
     `Amazon` = GMT_to_TR(temp = value, tipping_element = "AMAZ"),
     `Permafrost Thaw` = GMT_to_TR(temp = value, tipping_element = "PFAT")
@@ -359,6 +363,7 @@ tr
 ```
 
 ### Tipping risk: Plots
+
 ```{r}
 
 p.tipping <- ggplot(tr, aes(x=year, y=`Tipping Risk (%)`)) +
