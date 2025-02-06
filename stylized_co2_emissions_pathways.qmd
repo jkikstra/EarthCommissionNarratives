@@ -368,8 +368,8 @@ p.tipping <- ggplot(tr, aes(x=year, y=`Tipping Risk (%)`)) +
   geom_vline(xintercept=2100, linetype="dotted") +
   geom_line(aes(colour=scenario)) +
   theme_jsk() +
-  scale_colour_canva() +
-  scale_fill_canva() +
+  scale_colour_jco() +
+  scale_fill_jco() +
   scale_y_continuous(limits = c(0,1), expand = c(0,0)) +
   labs(title = "Tipping Risk",
        subtitle = "Using median temperature and Armstrong McKay et al. (2022), Science")
