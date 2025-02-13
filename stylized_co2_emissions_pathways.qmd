@@ -17,6 +17,7 @@ library("testthat")
 # library("geomtextpath")
 library("stringr")
 library("ggthemes")
+library("deSolve")
 
 here::i_am("EarthCommissionNarratives.Rproj")
 
@@ -27,7 +28,7 @@ source(here("utils.R"))
 
 # Making Emissions Pathways
 
-### Define emissions points (07.02.2025)
+### Define emissions points (10.02.2025)
 
 ```{r}
 
@@ -50,34 +51,8 @@ co2.2025 <- 40 # guesstimate
 emissions.definitions <- tibble(
   scenario = c(
     rep(
-      c("OH", "ER", "3S", "WW"),
-      times = c(6,5,6,6) + length(co2.historical.years)
-    )
-  ),
-  year = c(
-    # assume for all pathways that 1/3 on the way to net-zero CO2, we reach 50% reductions
-    c(co2.historical.years, 2025, round(2025+40/3), 2065, 2070, 2100, 2150), # OH
-    c(co2.historical.years, 2025, round(2025+45/3), 2070, 2100, 2150), # ER
-    c(co2.historical.years, 2025, round(2025+25/3), 2050, 2070, 2100, 2150), # 3S
-    c(co2.historical.years, 2025, round(2025+30/3), 2055, 2070, 2100, 2150) # WW
-  ),
-  co2.total = c(
-    c(co2.historical, co2.2025, co2.2025/2, 0, -2, -10, -20), # OH
-    c(co2.historical, co2.2025, co2.2025/2, 0, -10, -30), # ER
-    c(co2.historical, co2.2025, co2.2025/2, 0, -5, -5, -5), # 3S
-    c(co2.historical, co2.2025, co2.2025/2, 0, -5, -10, -10) # WW
-  )
-)
-```
-
-### Define emissions points (07.02.2025 - deeper)
-```{r}
-
-emissions.definitions.deeper <- tibble(
-  scenario = c(
-    rep(
-      c("OH", "ER", "3S", "WW"),
-      times = c(7,6,7,7) + length(co2.historical.years)
+      c("OH", "ER", "3S", "WW", "RAPID", "RAPID_REVERSE", "DELAY"),
+      times = c(7,6,7,7,5,5,4) + length(co2.historical.years)
     )
   ),
   year = c(
@@ -85,18 +60,35 @@ emissions.definitions.deeper <- tibble(
     c(co2.historical.years, 2025, round(2025+30/3), round(2025+30/3*2), 2055, 2070, 2100, 2150), # OH
     c(co2.historical.years, 2025, round(2025+40/3), round(2025+40/3*2), 2065, 2100, 2150), # ER
     c(co2.historical.years, 2025, round(2025+20/3), round(2025+20/3*2), 2045, 2070, 2100, 2150), # 3S
-    c(co2.historical.years, 2025, round(2025+25/3), round(2025+25/3*2), 2050, 2070, 2100, 2150) # WW
+    c(co2.historical.years, 2025, round(2025+25/3), round(2025+25/3*2), 2050, 2070, 2100, 2150), # WW
+    # add some boundary cases for further illustration
+    c(co2.historical.years, 2025, 2035, 2050, 2100, 2150),
+    c(co2.historical.years, 2025, 2035, 2050, 2100, 2150),
+    c(co2.historical.years, 2025, 2035, 2100, 2150)
   ),
   co2.total = c(
     c(co2.historical, co2.2025, co2.2025/2, co2.2025/2/2, 0, -2, -10, -20), # OH
     c(co2.historical, co2.2025, co2.2025/2, co2.2025/2/2, 0, -10, -30), # ER
     c(co2.historical, co2.2025, co2.2025/2, co2.2025/2/2, 0, -5, -5, -5), # 3S
-    c(co2.historical, co2.2025, co2.2025/2, co2.2025/2/2, 0, -5, -10, -10) # WW
+    c(co2.historical, co2.2025, co2.2025/2, co2.2025/2/2, 0, -5, -10, -10), # WW
+    c(co2.historical, co2.2025, 0, -3, -13, -20), # RAPID
+    c(co2.historical, co2.2025, 0, -20, -20, -20), # RAPID_REVERSE
+    c(co2.historical, co2.2025, co2.2025, 0, -20) # DELAY
+  ),
+  narrative = c(
+    rep(
+     c("EC narrative",
+    "EC narrative",
+    "EC narrative",
+    "EC narrative",
+    "Edge case",
+    "Edge case",
+    "Edge case"),
+    times = c(7,6,7,7,5,5,4) + length(co2.historical.years)
+    )
   )
 )
 ```
-
-
 
 ### Quick visual (CO2)
 
@@ -115,7 +107,7 @@ p.plot.co2.emissions.definitions <- ggplot(
     aes(
       group=interaction(scenario),
       colour = scenario, 
-      # linetype = scenario
+      linetype = narrative
     ),
     linewidth=1.2
   ) +
@@ -132,6 +124,7 @@ p.plot.co2.emissions.definitions <- ggplot(
   scale_colour_jco() +
   scale_x_continuous(expand = c(0,0),
                      breaks = c(2025,2050,2075,2100,2150)) +
+  scale_linetype_manual(values = c("solid", "dashed"), breaks = c("EC narrative", "Edge case")) +
   labs(
     title = "Sketched emission pathways",
     subtitle = "CO2",
@@ -141,14 +134,17 @@ p.plot.co2.emissions.definitions <- ggplot(
   guides(
     color = guide_legend(title = "Transformation Pathway"),
     linetype = guide_legend(title = "Transformation Pathway")
+  ) +
+  theme(
+    legend.position="bottom", legend.box = "vertical"
   )
 
 p.plot.co2.emissions.definitions
 
 save_ggplot(f = here("figures", "co2_sketch"),
        p = p.plot.co2.emissions.definitions,
-       h = 125,
-       w = 125)
+       h = 160,
+       w = 200)
 
 ```
 
@@ -203,65 +199,31 @@ write_delim(x = interpolated.data.wide,
             delim = ",")
 ```
 
-```{r}
-# library for interpolation
-library(zoo)
-
-# IAMC format (long)
-emissions.iamc.deeper <- emissions.definitions.deeper %>% 
-  mutate(model="EarthCommissionStylized",
-         region="World",
-         variable="Emissions|CO2",
-         value=co2.total*1e3,
-         unit="Mt CO2/yr") %>% 
-  select(model,scenario,region,variable,unit,year,value) %>% 
-  arrange(model,scenario,region,variable,unit,year,value)
-emissions.iamc.wide.deeper <- emissions.iamc.deeper %>% 
-  iamc_long_to_wide() %>% wide_sort_columns()
-
-interpolated.data.deeper <- emissions.iamc.deeper %>% # interpolate within groups
-    complete(model, scenario, region, variable, unit, year = 2015:2150) %>%  # Ensure all combinations exist
-    group_by(model, scenario, region, variable, unit) %>%
-    group_modify(~ expand_and_interpolate(.x)) %>%
-    ungroup()
-
-interpolated.data.wide.deeper <- interpolated.data.deeper %>% 
-  iamc_long_to_wide() %>% wide_sort_columns()
-
-
-# write out
-write_delim(x = interpolated.data.deeper,
-            file = here("data", "emissions", "emissions_deeper_iamc_not_interpolated_long.csv"),
-            delim = ",")
-
-write_delim(x = interpolated.data.wide.deeper,
-            file = here("data", "emissions", "emissions_deeper_iamc_not_interpolated.csv"),
-            delim = ",")
-```
-
-
 # Infilling & Climate run
 
 Note: this happens right now using the AR6 infilling pipeline. In the future we can do this more explicitly if we want to.
 
+# Read climate data
+
 ```{r}
 
-climate <- load_excel_iamc(file_path = here("data", "climate", "emissions_iamc_not_interpolated_emptysulfur_alloutput.xlsx")) %>% 
-  iamc_wide_to_long(upper.to.lower = T)
+climate <- load_excel_iamc(file_path = here("data", "climate", "emissions_iamc_not_interpolated_alloutput.xlsx")) %>% 
+  iamc_wide_to_long(upper.to.lower = T) %>% 
+  left_join(emissions.definitions %>% distinct(scenario,narrative))
 
-climate_extended <- load_excel_iamc(file_path = here("data", "climate", "emissions_iamc_not_interpolated_emptysulfur_alloutput_linearlyextended_p50.xlsx")) %>% 
-  iamc_wide_to_long(upper.to.lower = T)
+climate_extended <- load_excel_iamc(file_path = here("data", "climate", "emissions_iamc_not_interpolated_alloutput_linearlyextended_p50.xlsx")) %>% 
+  iamc_wide_to_long(upper.to.lower = T) %>% 
+   left_join(emissions.definitions %>% distinct(scenario,narrative))
 
-
-climate.deeper <- load_excel_iamc(file_path = here("data", "climate", "emissions_deeper_iamc_not_interpolated_emptysulfur_alloutput.xlsx")) %>% 
-  iamc_wide_to_long(upper.to.lower = T)
-
-climate_extended.deeper <- load_excel_iamc(file_path = here("data", "climate", "emissions_deeper_iamc_not_interpolated_emptysulfur_alloutput_linearlyextended_p50.xlsx")) %>% 
-  iamc_wide_to_long(upper.to.lower = T)
+climate_extended_p95 <- load_excel_iamc(file_path = here("data", "climate", "emissions_iamc_not_interpolated_alloutput_linearlyextended_p95.xlsx")) %>% 
+  iamc_wide_to_long(upper.to.lower = T) %>% 
+   left_join(emissions.definitions %>% distinct(scenario,narrative))
 
 ```
 
 # Tipping risk functions
+
+### Linear
 
 Using Table 1 of https://www.science.org/doi/10.1126/science.abn7950
 
@@ -366,6 +328,203 @@ GMT_to_TR <- Vectorize(GMT_to_TR)
 
 ```
 
+### ODE (example stylized timeseries)
+
+Following Moeller, Hoegner et al. (2024), ODE, with d=0
+
+```{r}
+# Load required library
+# install.packages("deSolve")
+# library(deSolve)
+
+# Define parameters
+n <- 3  # default exponent (follow Moeller, Hoegner et al. 2024)
+# TOTAL_D_GMT <- 2
+# TIMESTEPS <- 300
+# Delta_GMT <- c(seq(TOTAL_D_GMT/TIMESTEPS,TOTAL_D_GMT,TOTAL_D_GMT/TIMESTEPS*6), 
+#                seq(TOTAL_D_GMT,0,-TOTAL_D_GMT/TIMESTEPS*6/5)
+#                #rep(TOTAL_D_GMT, TIMESTEPS/6*5)
+#                )  # example timeseries in Global Mean Temperature; actual timeseries
+TIMESTEPS <- length(T_timeseries_scenario)
+Delta_GMT <- T_timeseries_scenario
+T_crit_i <- 1.5  # Example critical temperature threshold (e.g. take an estimate of AMOC first); TODO: loop over 4 tipping elements and their span 
+tau_i <- 150  # Example realisation timescale  (e.g. take an estimate of AMOC first); TODO: loop over 4 tipping elements and their span
+
+# Function defining the system of differential equations
+dx_dt <- function(t, x, params) {
+  n <- params["n"]
+  Delta_GMT <- params["Delta_GMT"]
+  T_crit_i <- params["T_crit_i"]
+  tau_i <- params["tau_i"]
+  d <- 0  # Given that d = 0
+  
+  # Compute the driving force term
+  driving_force <- ((n-1) / (n^n)^(1/(n-1))) * (Delta_GMT / T_crit_i)
+  
+  # Compute dx/dt
+  dx <- (-x^n + x + driving_force) / tau_i
+  
+  return(list(dx))
+}
+
+# Initial condition
+x0 <- -1  # Example initial condition; tipping risk in 2025
+
+solution_df <- tibble()
+for (t in seq(1,TIMESTEPS)){
+  # Time sequence for solving
+  time <- seq(0, 1, by = 1)  # Solve for 1 time units
+  
+  # Define parameters
+  params <- c(n = n, Delta_GMT = Delta_GMT[t], T_crit_i = T_crit_i, tau_i = tau_i)
+  
+  # Solve using ode function
+  solution <- ode(y = x0, times = time, func = dx_dt, parms = params) %>% 
+    as.data.frame() %>% 
+    rename(x = `1`) %>% 
+    filter(time==1) %>% 
+    mutate(time = t+1850-1) %>% 
+    mutate(GMT = Delta_GMT[t])
+  
+  # Add to a timeseries-like data frame for visualization
+  solution_df <- solution_df %>% bind_rows(solution)
+  
+  # update initial value
+  x0 <- solution %>% pull(x)
+}
+
+
+# Plot the solution (over time)
+plot(solution_df$time, solution_df$x, type = "l", col = "blue", lwd = 2,
+     xlab = "Time", ylab = "x(t)", main = "Solution of Differential Equation")
+
+# Plot the solution (over temp)
+plot(solution_df$GMT, solution_df$x, type = "l", col = "blue", lwd = 2,
+     xlab = "Temperature", ylab = "x(t)", main = "Solution of Differential Equation")
+
+# Plot the temp (over time)
+plot(solution_df$time, solution_df$GMT, type = "l", col = "blue", lwd = 2,
+     xlab = "Year", ylab = "Temperature", main = "GSAT")
+
+```
+
+### ODE (example Earth Commission timeseries)
+
+Following Moeller, Hoegner et al. (2024), ODE, with d=0
+
+##### Function
+```{r}
+
+# Function defining the system of differential equations
+dx_dt <- function(t, x, params) {
+  n <- params["n"]
+  Delta_GMT <- params["Delta_GMT"]
+  T_crit_i <- params["T_crit_i"]
+  tau_i <- params["tau_i"]
+  d <- 0  # Given that d = 0
+  
+  # Compute the driving force term
+  driving_force <- ((n-1) / (n^n)^(1/(n-1))) * (Delta_GMT / T_crit_i)
+  
+  # Compute dx/dt
+  dx <- (-x^n + x + driving_force) / tau_i
+  
+  return(list(dx))
+}
+
+calculate_tipping_timeseries <- function(T_timeseries_scenario, T_crtic, tau){
+  n <- 3  # default exponent (follow Moeller, Hoegner et al. 2024)
+  TIMESTEPS <- length(T_timeseries_scenario)
+  Delta_GMT <- T_timeseries_scenario
+  T_crit_i <- T_crtic  # critical temperature threshold 
+  tau_i <- tau  # realisation timescale
+  
+
+  
+  # Initial condition
+  x0 <- -1  # Example initial condition; tipping risk in 2025
+  
+  solution_df <- tibble()
+  for (t in seq(1,TIMESTEPS)){
+    # Time sequence for solving
+    time <- seq(0, 1, by = 1)  # Solve for 1 time units
+    
+    # Define parameters
+    params <- c(n = n, Delta_GMT = Delta_GMT[t], T_crit_i = T_crit_i, tau_i = tau_i)
+    
+    # Solve using ode function
+    solution <- ode(y = x0, times = time, func = dx_dt, parms = params) %>% 
+      as.data.frame() %>% 
+      rename(x = `1`) %>% 
+      filter(time==1) %>% 
+      mutate(time = t+1850-1) %>% 
+      mutate(GMT = Delta_GMT[t])
+    
+    # Add to a timeseries-like data frame for visualization
+    solution_df <- solution_df %>% bind_rows(solution)
+    
+    # update initial value
+    x0 <- solution %>% pull(x)
+  }
+  
+  return(solution_df %>% 
+           mutate(T_crtic=T_crtic) %>% 
+           mutate(tau=tau))
+
+}
+
+
+```
+
+##### Getting the full parameter space
+```{r}
+
+# using 03_monte_carlo
+
+tipping_params <- read.table(here(
+  "moellerhoegner2024",
+  "eahoegner",
+  "tipping_risk-v.1-1",
+  "eahoegner-tipping_risk-f5aab15",
+ # "latin_sh_file.txt" # without reef (1000 members)
+ "latin_sh_file_with_reef.txt" # with coral reefs (100 members)
+), sep = " ", header = FALSE, stringsAsFactors = FALSE) %>% 
+  rename(
+    T_GrIS=V1,
+    T_AMOC=V2,
+    T_WAIS=V3,
+    T_AMAZ=V4,
+    T_REEF=V5,
+    
+    tau_GrIS=V6,
+    tau_AMOC=V7,
+    tau_WAIS=V8,
+    tau_AMAZ=V9,
+    tau_REEF=V10
+  ) %>% 
+  mutate(id=row_number()) %>% 
+  pivot_longer(cols = -id,
+               names_to = c("variable", "element"),
+               names_sep = "_",
+               values_to = "value") %>%
+  pivot_wider(
+    names_from = variable,
+    values_from = value
+  )
+# quick visual of the distributions
+ggplot(tipping_params, aes(x=`tau`)) +
+  facet_wrap(~element, scales="free") +
+  geom_histogram()
+
+ids <- tipping_params %>% distinct(id) %>% pull(id)
+elements <- tipping_params %>% distinct(element) %>% pull(element)
+
+
+
+```
+
+
+
 # Visualise
 
 ### Emissions - GHGS (CH4)
@@ -402,6 +561,7 @@ p.plot.ch4.emissions.definitions <- ggplot(
   scale_colour_jco() +
   scale_x_continuous(expand = c(0,0),
                      breaks = c(2025,2050,2075,2100,2150)) +
+  scale_linetype_manual(values = c("solid", "dashed"), breaks = c("EC narrative", "Edge case")) +
   labs(
     title = "Sketched emission pathways",
     subtitle = "Methane",
@@ -456,6 +616,7 @@ p.plot.so2.emissions.definitions <- ggplot(
   scale_colour_jco() +
   scale_x_continuous(expand = c(0,0),
                      breaks = c(2025,2050,2075,2100,2150)) +
+  scale_linetype_manual(values = c("solid", "dashed"), breaks = c("EC narrative", "Edge case")) +
   labs(
     title = "Sketched emission pathways",
     subtitle = "Sulfur",
@@ -475,6 +636,7 @@ save_ggplot(f = here("figures", "so2_sketch"),
        w = 125)
 
 ```
+
 ### Emissions - pollutants (CO)
 
 ```{r}
@@ -509,6 +671,7 @@ p.plot.co.emissions.definitions <- ggplot(
   scale_colour_jco() +
   scale_x_continuous(expand = c(0,0),
                      breaks = c(2025,2050,2075,2100,2150)) +
+  scale_linetype_manual(values = c("solid", "dashed"), breaks = c("EC narrative", "Edge case")) +
   labs(
     title = "Sketched emission pathways",
     subtitle = "Carbon Monoxide",
@@ -563,6 +726,7 @@ p.plot.nox.emissions.definitions <- ggplot(
   scale_colour_jco() +
   scale_x_continuous(expand = c(0,0),
                      breaks = c(2025,2050,2075,2100,2150)) +
+  scale_linetype_manual(values = c("solid", "dashed"), breaks = c("EC narrative", "Edge case")) +
   labs(
     title = "Sketched emission pathways",
     subtitle = "Nitrogen oxides (NOx)",
@@ -617,6 +781,7 @@ p.plot.voc.emissions.definitions <- ggplot(
   scale_colour_jco() +
   scale_x_continuous(expand = c(0,0),
                      breaks = c(2025,2050,2075,2100,2150)) +
+  scale_linetype_manual(values = c("solid", "dashed"), breaks = c("EC narrative", "Edge case")) +
   labs(
     title = "Sketched emission pathways",
     subtitle = "Non-methane Volatile Organic Compounds (NMVOC)",
@@ -636,7 +801,6 @@ save_ggplot(f = here("figures", "NMVOC_sketch"),
        w = 125)
 
 ```
-
 
 ### Temperature
 
@@ -665,7 +829,8 @@ aes(x=year)) +
   ) +
   geom_line(
     aes(y = `GSAT (50.0th Percentile)`,
-        colour = scenario),
+        colour = scenario,
+        linetype = narrative),
     linewidth=1.2
   ) +
   # add desired extension of temperature until 2150
@@ -679,7 +844,8 @@ aes(x=year)) +
   theme_jsk() +
   scale_colour_jco() +
   scale_fill_jco() +
-  scale_y_continuous(limits = c(0,2)) +
+  scale_y_continuous(limits = c(0,2.5)) +
+  scale_linetype_manual(values = c("solid", "dashed"), breaks = c("EC narrative", "Edge case")) +
   labs(title = "Temperature",
        subtitle = "33-67th percentile range",
        caption = "Pre-2100 using IPCC climate emulator; post-2100 to meet 1C target.") +
@@ -687,17 +853,20 @@ aes(x=year)) +
     fill = guide_legend(title = "Transformation Pathway"),
     color = guide_legend(title = "Transformation Pathway"),
     linetype = guide_legend(title = "Transformation Pathway")
+  ) +
+  theme(
+    legend.position="bottom", legend.box = "vertical"
   )
 
 p.temp
 
 save_ggplot(f = here("figures", "temp_magicc"),
        p = p.temp,
-       h = 125,
-       w = 125)
+       h = 160,
+       w = 200)
 ```
 
-### Tipping risk: Data
+### Tipping risk: Data (linear)
 
 ```{r}
 # until 2150
@@ -718,7 +887,7 @@ tr <- climate_extended %>%
 tr
 ```
 
-### Tipping risk: Plots
+### Tipping risk: Plots (linear)
 
 ```{r}
 
@@ -728,7 +897,8 @@ p.tipping <- ggplot(tr, aes(x=year, y=`Tipping Risk (%)`*100)) +
   annotate("rect", xmin=2100, xmax=Inf, ymin=-Inf, ymax=Inf, alpha=0.2, fill="grey", colour=NA) +
   geom_vline(xintercept=2100, linetype="dotted") +
   geom_line(data = . %>% filter(year<=2100),
-            aes(colour=scenario),
+            aes(colour=scenario,
+                linetype=narrative),
             linewidth = 1.2) +
   geom_line(data = . %>% filter(year>=2100),
             aes(colour=scenario),
@@ -738,6 +908,7 @@ p.tipping <- ggplot(tr, aes(x=year, y=`Tipping Risk (%)`*100)) +
   scale_fill_jco() +
   scale_x_continuous(expand = c(0,0)) +
   scale_y_continuous(limits = c(0,100), expand = c(0,0)) +
+  scale_linetype_manual(values = c("solid", "dashed"), breaks = c("EC narrative", "Edge case")) +
   labs(title = "Tipping Risk",
        subtitle = "Using median temperature and Armstrong McKay et al. (2022), Science",
        y = "Tipping Risk (%)") +
@@ -745,436 +916,131 @@ p.tipping <- ggplot(tr, aes(x=year, y=`Tipping Risk (%)`*100)) +
   guides(
     color = guide_legend(title = "Transformation Pathway"),
     linetype = guide_legend(title = "Transformation Pathway")
+  ) +
+  theme(
+    legend.position="bottom", legend.box = "vertical"
   )
 
 p.tipping
 
 save_ggplot(f = here("figures", "tipping_risk"),
        p = p.tipping,
-       h = 125,
-       w = 250)
+       h = 160,
+       w = 400)
 ```
 
-
-
-# Visualise (deeper)
-
-### Emissions - GHGs (CO2)
-
-```{r}
-# quick visual
-p.plot.co2.emissions.definitions <- ggplot(
-  emissions.definitions.deeper,
-  aes(x=year, y=co2.total)
-) +
-  mark_history(sy = 2025) +
-  annotate("rect", xmin=2100, xmax=Inf, ymin=-Inf, ymax=Inf, alpha=0.2, fill="grey", colour=NA) +
-  geom_vline(xintercept=2100, linetype="dotted") +
-  geom_line(
-    data = . %>% filter(year<=2100),
-    aes(
-      group=interaction(scenario),
-      colour = scenario, 
-      # linetype = scenario
-    ),
-    linewidth=1.2
-  ) +
-  geom_line(
-    data = . %>% filter(year>=2100),
-    aes(
-      group=interaction(scenario),
-      colour = scenario, 
-      # linetype = scenario
-    ),
-    linewidth=1, linetype = "dotted"
-  ) +
-  theme_jsk() +
-  scale_colour_jco() +
-  scale_x_continuous(expand = c(0,0),
-                     breaks = c(2025,2050,2075,2100,2150)) +
-  labs(
-    title = "Sketched emission pathways",
-    subtitle = "CO2",
-    caption = "Post-2100 is indicative; not used in climate calculations.",
-    y = "Gt CO2/yr"
-  ) +
-  guides(
-    color = guide_legend(title = "Transformation Pathway"),
-    linetype = guide_legend(title = "Transformation Pathway")
-  )
-
-p.plot.co2.emissions.definitions
-
-save_ggplot(f = here("figures", "co2_sketch_deeper"),
-       p = p.plot.co2.emissions.definitions,
-       h = 125,
-       w = 125)
-
-
-```
-
-
-### Emissions - GHGs (CH4)
-
+### Tipping risk: Data (ODE)
 ```{r}
 
-# quick visual
-p.plot.ch4.emissions.definitions <- ggplot(
-  climate.deeper %>% filter(unit=="Mt CH4/yr"),
-  aes(x=year, y=value)
-) +
-  mark_history(sy = 2025) +
-  annotate("rect", xmin=2100, xmax=Inf, ymin=-Inf, ymax=Inf, alpha=0.2, fill="grey", colour=NA) +
-  geom_vline(xintercept=2100, linetype="dotted") +
-  geom_line(
-    data = . %>% filter(year<=2100),
-    aes(
-      group=interaction(scenario),
-      colour = scenario, 
-      # linetype = scenario
-    ),
-    linewidth=1.2
-  ) +
-  geom_line(
-    data = . %>% filter(year>=2100),
-    aes(
-      group=interaction(scenario),
-      colour = scenario, 
-      # linetype = scenario
-    ),
-    linewidth=1, linetype = "dotted"
-  ) +
-  theme_jsk() +
-  scale_colour_jco() +
-  scale_x_continuous(expand = c(0,0),
-                     breaks = c(2025,2050,2075,2100,2150)) +
-  labs(
-    title = "Sketched emission pathways",
-    subtitle = "Methane",
-    caption = "Inferred from mitigation pathways.",
-    y = "Mt CH4/yr"
-  ) +
-  guides(
-    color = guide_legend(title = "Transformation Pathway"),
-    linetype = guide_legend(title = "Transformation Pathway")
-  )
+scenarios <- climate_extended %>% scenario_unique()
+tipping_data <- NULL
+for (scen in scenarios){
+  
+  print("==================")
+  print(paste0("scenario: ", scen))
+  print("==================")
+  
+  for (temp.option in c("p50", "p95")){
+    print(paste0("Temperature response: ", temp.option))
+    
+    if (temp.option == "p50"){
+      # loop over scenarios (p50 timeseries); 
+      T_hist <- readxl::read_excel(path = here(
+          "data", "climate", "historical_p50_timeseries_magicc_AR6_until2025.xlsx"
+      ), sheet = "data") %>%
+        select(-climate_model, -percentile) %>% mutate(unit = "K") %>% 
+        iamc_wide_to_long() %>%
+        filter(year>=1850) %>%
+        pull(value)
+      
+      T_fut <- climate_extended %>% filter(year>2025, scenario==scen) %>% pull(value)
+      
+      T_timeseries_scenario <- c(T_hist, T_fut)
+      
+    } else if (temp.option == "p95"){
+      # loop over scenarios (p95 timeseries); 
+      T_hist <- readxl::read_excel(path = here(
+          "data", "climate", "historical_p95_timeseries_magicc_AR6_until2025.xlsx"
+      ), sheet = "data") %>%
+        select(-climate_model, -percentile) %>% mutate(unit = "K") %>% 
+        iamc_wide_to_long() %>%
+        filter(year>=1850) %>%
+        pull(value)
+      
+      T_fut <- climate_extended_p95 %>% filter(year>2025, scenario==scen) %>% pull(value)
+      
+      T_timeseries_scenario <- c(T_hist, T_fut)
+      
+    }
+    
+    
+    
+    
+    # calculate tipping
+  
+    for (i in ids){
+      
+      if (i %% 10 == 0){print(paste0("id: ", i))}
+      
+      # for (e in elements){
+      for (e in c("AMOC", "REEF")){
+        
+        T_c = tipping_params %>% filter(id==i,element==e) %>% pull(T)
+        ta = tipping_params %>% filter(id==i,element==e) %>% pull(tau)
+        
+        
+        tipping_data <- tipping_data %>% 
+          bind_rows(
+            calculate_tipping_timeseries(
+              T_timeseries_scenario = T_timeseries_scenario,
+              T_crtic = T_c,
+              tau = ta
+              ) %>% 
+              mutate(scenario=scen,
+                     member_id=i,
+                     tipping_element=e,
+                     temp.response=temp.option)
+          )
+        
+      }
+    } 
+    
+    
+    
+    
+  }
+}
 
-p.plot.ch4.emissions.definitions
 
-save_ggplot(f = here("figures", "ch4_sketch_deeper"),
-       p = p.plot.ch4.emissions.definitions,
-       h = 125,
-       w = 125)
+write_delim(x = tipping_data,
+            file = here("data", "tipping", "tipping_data_amoc_reef.csv"),
+            delim = ",")
+
 
 ```
 
-### Emissions - pollutants (Sulfur)
-
+### Tipping risk: Plots (ODE)
 ```{r}
 
-# quick visual
-p.plot.so2.emissions.definitions <- ggplot(
-  climate.deeper %>% filter_includes("Sulfur") %>% filter_includes("Infilled"),
-  aes(x=year, y=value)
-) +
-  mark_history(sy = 2025) +
-  annotate("rect", xmin=2100, xmax=Inf, ymin=-Inf, ymax=Inf, alpha=0.2, fill="grey", colour=NA) +
-  geom_vline(xintercept=2100, linetype="dotted") +
-  geom_line(
-    data = . %>% filter(year<=2100),
-    aes(
-      group=interaction(scenario),
-      colour = scenario, 
-      # linetype = scenario
-    ),
-    linewidth=1.2
-  ) +
-  geom_line(
-    data = . %>% filter(year>=2100),
-    aes(
-      group=interaction(scenario),
-      colour = scenario, 
-      # linetype = scenario
-    ),
-    linewidth=1, linetype = "dotted"
-  ) +
-  theme_jsk() +
-  scale_colour_jco() +
-  scale_x_continuous(expand = c(0,0),
-                     breaks = c(2025,2050,2075,2100,2150)) +
-  labs(
-    title = "Sketched emission pathways",
-    subtitle = "Sulfur",
-    caption = "Inferred from mitigation pathways.",
-    y = "Mt SO2/yr"
-  ) +
-  guides(
-    color = guide_legend(title = "Transformation Pathway"),
-    linetype = guide_legend(title = "Transformation Pathway")
-  )
+member_count <- tipping_data %>% distinct(member_id) %>% pull(member_id) %>% length()
 
-p.plot.so2.emissions.definitions
-
-save_ggplot(f = here("figures", "so2_sketch_deeper"),
-       p = p.plot.so2.emissions.definitions,
-       h = 125,
-       w = 125)
-
-```
-### Emissions - pollutants (CO)
-
-```{r}
-
-# quick visual
-p.plot.co.emissions.definitions <- ggplot(
-  climate.deeper %>% filter(unit=="Mt CO/yr"),
-  aes(x=year, y=value)
-) +
-  mark_history(sy = 2025) +
-  annotate("rect", xmin=2100, xmax=Inf, ymin=-Inf, ymax=Inf, alpha=0.2, fill="grey", colour=NA) +
-  geom_vline(xintercept=2100, linetype="dotted") +
-  geom_line(
-    data = . %>% filter(year<=2100),
-    aes(
-      group=interaction(scenario),
-      colour = scenario, 
-      # linetype = scenario
-    ),
-    linewidth=1.2
-  ) +
-  geom_line(
-    data = . %>% filter(year>=2100),
-    aes(
-      group=interaction(scenario),
-      colour = scenario, 
-      # linetype = scenario
-    ),
-    linewidth=1, linetype = "dotted"
-  ) +
-  theme_jsk() +
-  scale_colour_jco() +
-  scale_x_continuous(expand = c(0,0),
-                     breaks = c(2025,2050,2075,2100,2150)) +
-  labs(
-    title = "Sketched emission pathways",
-    subtitle = "Carbon Monoxide",
-    caption = "Inferred from mitigation pathways.",
-    y = "Mt CO/yr"
-  ) +
-  guides(
-    color = guide_legend(title = "Transformation Pathway"),
-    linetype = guide_legend(title = "Transformation Pathway")
-  )
-
-p.plot.co.emissions.definitions
-
-save_ggplot(f = here("figures", "co_sketch_deeper"),
-       p = p.plot.co.emissions.definitions,
-       h = 125,
-       w = 125)
-
-```
-
-### Emissions - pollutants (NOx)
-
-```{r}
-
-# quick visual
-p.plot.nox.emissions.definitions <- ggplot(
-  climate.deeper %>% filter(unit=="Mt NO2/yr"),
-  aes(x=year, y=value)
-) +
-  mark_history(sy = 2025) +
-  annotate("rect", xmin=2100, xmax=Inf, ymin=-Inf, ymax=Inf, alpha=0.2, fill="grey", colour=NA) +
-  geom_vline(xintercept=2100, linetype="dotted") +
-  geom_line(
-    data = . %>% filter(year<=2100),
-    aes(
-      group=interaction(scenario),
-      colour = scenario, 
-      # linetype = scenario
-    ),
-    linewidth=1.2
-  ) +
-  geom_line(
-    data = . %>% filter(year>=2100),
-    aes(
-      group=interaction(scenario),
-      colour = scenario, 
-      # linetype = scenario
-    ),
-    linewidth=1, linetype = "dotted"
-  ) +
-  theme_jsk() +
-  scale_colour_jco() +
-  scale_x_continuous(expand = c(0,0),
-                     breaks = c(2025,2050,2075,2100,2150)) +
-  labs(
-    title = "Sketched emission pathways",
-    subtitle = "Nitrogen oxides (NOx)",
-    caption = "Inferred from mitigation pathways.",
-    y = "Mt NO2/yr"
-  ) +
-  guides(
-    color = guide_legend(title = "Transformation Pathway"),
-    linetype = guide_legend(title = "Transformation Pathway")
-  )
-
-p.plot.nox.emissions.definitions
-
-save_ggplot(f = here("figures", "NOx_sketch_deeper"),
-       p = p.plot.nox.emissions.definitions,
-       h = 125,
-       w = 125)
-
-```
-
-### Emissions - pollutants (VOC)
-
-```{r}
-
-# quick visual
-p.plot.voc.emissions.definitions <- ggplot(
-  climate.deeper %>% filter(unit=="Mt VOC/yr"),
-  aes(x=year, y=value)
-) +
-  mark_history(sy = 2025) +
-  annotate("rect", xmin=2100, xmax=Inf, ymin=-Inf, ymax=Inf, alpha=0.2, fill="grey", colour=NA) +
-  geom_vline(xintercept=2100, linetype="dotted") +
-  geom_line(
-    data = . %>% filter(year<=2100),
-    aes(
-      group=interaction(scenario),
-      colour = scenario, 
-      # linetype = scenario
-    ),
-    linewidth=1.2
-  ) +
-  geom_line(
-    data = . %>% filter(year>=2100),
-    aes(
-      group=interaction(scenario),
-      colour = scenario, 
-      # linetype = scenario
-    ),
-    linewidth=1, linetype = "dotted"
-  ) +
-  theme_jsk() +
-  scale_colour_jco() +
-  scale_x_continuous(expand = c(0,0),
-                     breaks = c(2025,2050,2075,2100,2150)) +
-  labs(
-    title = "Sketched emission pathways",
-    subtitle = "Non-methane Volatile Organic Compounds (NMVOC)",
-    caption = "Inferred from mitigation pathways.",
-    y = "Mt VOC/yr"
-  ) +
-  guides(
-    color = guide_legend(title = "Transformation Pathway"),
-    linetype = guide_legend(title = "Transformation Pathway")
-  )
-
-p.plot.voc.emissions.definitions
-
-save_ggplot(f = here("figures", "NMVOC_sketch_deeper"),
-       p = p.plot.voc.emissions.definitions,
-       h = 125,
-       w = 125)
-
-```
-
-
-### Temperature
-
-```{r}
-
-# real data
-p.temp <- ggplot(climate.deeper %>% filter(variable%in%c(
-  "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
-  "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|33.0th Percentile",
-  "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|67.0th Percentile"
-)) %>% 
-  remove_variable_firstlevel_match("AR6 climate diagnostics") %>%
-  remove_variable_firstlevel_match("Surface Temperature \\(GSAT\\)") %>%
-  remove_variable_firstlevel_match("MAGICCv7.5.3") %>%
-  mutate(variable = paste0("GSAT (", variable, ")")) %>% 
-  pivot_wider(names_from = variable, values_from = value),
-aes(x=year)) +
-  mark_history(sy = 2025) +
-  annotate("rect", xmin=2100, xmax=Inf, ymin=-Inf, ymax=Inf, alpha=0.2, fill="grey", colour=NA) +
-  geom_vline(xintercept=2100, linetype="dotted") +
-  geom_ribbon(
-    aes(ymin = `GSAT (67.0th Percentile)`, 
-        ymax = `GSAT (33.0th Percentile)`,
-        fill = scenario),
-    alpha=0.1
-  ) +
-  geom_line(
-    aes(y = `GSAT (50.0th Percentile)`,
-        colour = scenario),
-    linewidth=1.2
-  ) +
-  # add desired extension of temperature until 2150
-  geom_line(
-    data = climate_extended.deeper,
-    aes(y = value,
-        colour = scenario),
-    linewidth = 1,
-    linetype = "dotted"
-  ) +
-  theme_jsk() +
-  scale_colour_jco() +
-  scale_fill_jco() +
-  scale_y_continuous(limits = c(0,2)) +
-  labs(title = "Temperature",
-       subtitle = "33-67th percentile range",
-       caption = "Pre-2100 using IPCC climate emulator; post-2100 to meet 1C target.") +
-  guides(
-    fill = guide_legend(title = "Transformation Pathway"),
-    color = guide_legend(title = "Transformation Pathway"),
-    linetype = guide_legend(title = "Transformation Pathway")
-  )
-
-p.temp
-
-save_ggplot(f = here("figures", "temp_magicc_deeper"),
-       p = p.temp,
-       h = 125,
-       w = 125)
-```
-
-### Tipping risk: Data
-
-```{r}
-# until 2150
-tr.deeper <- climate_extended.deeper %>% 
-  mutate(
-    AMOC = GMT_to_TR(temp = value, tipping_element = "AMOC"),
-    Greenland = GMT_to_TR(temp = value, tipping_element = "GrIS"),
-    `West Antarctica` = GMT_to_TR(temp = value, tipping_element = "WAIS"),
-    `Coral Reefs` = GMT_to_TR(temp = value, tipping_element = "REEF"),
-    `Amazon` = GMT_to_TR(temp = value, tipping_element = "AMAZ"),
-    `Permafrost Thaw` = GMT_to_TR(temp = value, tipping_element = "PFAT")
+tipping_realization_risk <- tipping_data %>% 
+  reframe(
+    `Tipping Realization risk (%)` = sum(ifelse(x>=0,1,0)) / member_count,
+    .by = c("time", "GMT", "scenario", "tipping_element", "temp.response")
   ) %>% 
-  select(-value,-unit) %>% 
-  pivot_longer(cols = AMOC:`Permafrost Thaw`,
-               names_to = "Tipping Element",
-               values_to = "Tipping Risk (%)")
+  rename(year=time, `Tipping Element` = tipping_element) %>% 
+  left_join(emissions.definitions %>% distinct(scenario,narrative))
 
-tr.deeper
-```
 
-### Tipping risk: Plots
-
-```{r}
-
-p.tipping <- ggplot(tr.deeper, aes(x=year, y=`Tipping Risk (%)`*100)) +
-  facet_grid(~`Tipping Element`) +
+p.tipping.realization <- ggplot(tipping_realization_risk, aes(x=year, y=`Tipping Realization risk (%)`*100)) +
+  facet_grid(temp.response~`Tipping Element`) +
   mark_history(sy = 2025) +
   annotate("rect", xmin=2100, xmax=Inf, ymin=-Inf, ymax=Inf, alpha=0.2, fill="grey", colour=NA) +
   geom_vline(xintercept=2100, linetype="dotted") +
   geom_line(data = . %>% filter(year<=2100),
-            aes(colour=scenario),
+            aes(colour=scenario,
+                linetype=narrative),
             linewidth = 1.2) +
   geom_line(data = . %>% filter(year>=2100),
             aes(colour=scenario),
@@ -1184,19 +1050,27 @@ p.tipping <- ggplot(tr.deeper, aes(x=year, y=`Tipping Risk (%)`*100)) +
   scale_fill_jco() +
   scale_x_continuous(expand = c(0,0)) +
   scale_y_continuous(limits = c(0,100), expand = c(0,0)) +
-  labs(title = "Tipping Risk",
-       subtitle = "Using median temperature and Armstrong McKay et al. (2022), Science",
-       y = "Tipping Risk (%)") +
+  scale_linetype_manual(values = c("solid", "dashed"), breaks = c("EC narrative", "Edge case")) +
+  labs(title = "Tipping Realization Risk ",
+       subtitle = "Using approach of Moeller et al. (2024), based on Wunderling et al. and Armstrong McKay et al. (2022)",
+       caption = "Not considering cascading/interaction effects",
+       y = "Tipping Realization Risk (%)") +
   theme(panel.spacing = unit(1.7, "lines")) +
   guides(
     color = guide_legend(title = "Transformation Pathway"),
     linetype = guide_legend(title = "Transformation Pathway")
+  ) +
+  theme(
+    legend.position="bottom", legend.box = "vertical"
   )
 
-p.tipping
+p.tipping.realization
 
-save_ggplot(f = here("figures", "tipping_risk_deeper"),
-       p = p.tipping,
-       h = 125,
-       w = 250)
+save_ggplot(f = here("figures", "tipping_risk_realization"),
+       p = p.tipping.realization,
+       h = 160,
+       w = 300)
+
+
 ```
+
